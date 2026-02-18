@@ -1,0 +1,115 @@
+﻿@page "/"
+@using ProductInventorySystem.Blazor.Models
+@using ProductInventorySystem.Blazor.Services
+@inject IProductService Svc
+
+<PageTitle>Dashboard</PageTitle>
+
+<div class="page-header">
+    <div>
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub">Inventory overview</div>
+    </div>
+    <a href="/products/create" class="btn btn-primary">➕ New Product</a>
+</div>
+
+@if (_loading)
+{
+    <div class="loading-box"><div class="spinner"></div><span>Loading...</span></div>
+}
+else
+{
+    @if (_err != null)
+    {
+        <div class="alert alert-error">⚠️ @_err</div>
+    }
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Total Products</div>
+            <div class="stat-val blue">@_total</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Stock</div>
+            <div class="stat-val green">@_stock</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Out of Stock</div>
+            <div class="stat-val red">@_zero</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Active Products</div>
+            <div class="stat-val amber">@_active</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Recent Products</span>
+            <a href="/products" class="btn btn-outline btn-sm">View All →</a>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Code</th>
+                        <th>HSN</th>
+                        <th>Stock</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _list)
+                    {
+                        <tr>
+                            <td class="td-name">@p.ProductName</td>
+                            <td class="td-code">@p.ProductCode</td>
+                            <td>@p.HSNCode</td>
+                            <td><span class="@SC(p.TotalStock)">@p.TotalStock units</span></td>
+                            <td>
+                                <span class="badge @(p.Active ? "badge-active" : "badge-inactive")">
+                                    @(p.Active ? "Active" : "Inactive")
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (!_list.Any())
+            {
+                <div class="empty">
+                    <div class="empty-icon">📦</div>
+                    <div class="empty-title">No products yet</div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    bool _loading = true;
+    string? _err;
+    List<ProductListDto> _list = new();
+    int _total, _active, _zero;
+    decimal _stock;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (data, err) = await Svc.GetProductsAsync(1, 5);
+        if (data != null)
+        {
+            _list = data.Items;
+            _total = data.TotalCount;
+            _active = _list.Count(p => p.Active);
+            _stock = _list.Sum(p => p.TotalStock);
+            _zero = _list.SelectMany(p => p.Variants)
+                           .SelectMany(v => v.SubVariants)
+                           .Count(s => s.Stock == 0);
+        }
+        else _err = err;
+        _loading = false;
+    }
+
+    string SC(decimal s) => s == 0 ? "stock-zero" : s < 10 ? "stock-low" : "stock-ok";
+}

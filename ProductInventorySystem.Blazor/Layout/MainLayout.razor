@@ -1,0 +1,40 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager Nav
+
+<div class="layout">
+    <nav class="sidebar">
+        <div class="sidebar-brand">📦 <span>Inventory</span> System</div>
+        <div class="nav-section">Main Menu</div>
+        <a class="nav-link @A("/")" href="/">🏠 Dashboard</a>
+        <a class="nav-link @A("/products")" href="/products">📋 Products</a>
+        <a class="nav-link @A("/products/create")" href="/products/create">➕ New Product</a>
+        <a class="nav-link @A("/stock")" href="/stock">🔄 Stock Manager</a>
+    </nav>
+    <div class="main-wrap">
+        <header class="topbar">
+            <div class="topbar-left">@Title()</div>
+            <div class="topbar-right">API → https://localhost:7230</div>
+        </header>
+        <div class="page">@Body</div>
+    </div>
+</div>
+
+@code {
+    string A(string path)
+    {
+        var cur = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].TrimStart('/');
+        return cur.Equals(path, StringComparison.OrdinalIgnoreCase) ? "active" : "";
+    }
+    string Title()
+    {
+        var cur = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].TrimStart('/');
+        return cur switch
+        {
+            "/" => "Dashboard",
+            "/products" => "Product List",
+            "/products/create" => "Create Product",
+            "/stock" => "Stock Manager",
+            _ => "Inventory System"
+        };
+    }
+}

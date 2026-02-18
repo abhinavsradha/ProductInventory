@@ -1,0 +1,282 @@
+﻿@page "/products/create"
+@using ProductInventorySystem.Blazor.Models
+@using ProductInventorySystem.Blazor.Services
+@inject IProductService Svc
+@inject NavigationManager Nav
+
+<PageTitle>Create Product</PageTitle>
+
+<div class="page-header">
+    <div>
+        <div class="page-title">Create Product</div>
+        <div class="page-sub">Add a new product with variants and options</div>
+    </div>
+    <a href="/products" class="btn btn-outline">← Back</a>
+</div>
+
+@if (_success)
+{
+    <div class="alert alert-success">
+        Product created successfully!
+        <a href="/products" style="font-weight:600;margin-left:8px">View Products →</a>
+    </div>
+}
+@if (_err != null)
+{
+    <div class="alert alert-error">@_err</div>
+}
+
+<div style="display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start">
+
+    <div>
+        <!-- BASIC INFO -->
+        <div class="card" style="margin-bottom:16px">
+            <div class="card-header"><span class="card-title">Basic Info</span></div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Product Name <span class="req">*</span></label>
+                        <input class="form-control @(E("Name") ? "is-invalid" : "")"
+                               placeholder="e.g. Cotton T-Shirt"
+                               @bind="_f.Name" @bind:event="oninput" />
+                        @if (E("Name"))
+                        {
+                            <div class="field-err">@_errs["Name"]</div>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Product Code <span class="req">*</span></label>
+                        <input class="form-control @(E("ProductCode") ? "is-invalid" : "")"
+                               placeholder="e.g. SHIRT-001"
+                               @bind="_f.ProductCode" @bind:event="oninput" />
+                        @if (E("ProductCode"))
+                        {
+                            <div class="field-err">@_errs["ProductCode"]</div>
+                        }
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">HSN Code <span class="req">*</span></label>
+                        <input class="form-control @(E("HSNCode") ? "is-invalid" : "")"
+                               placeholder="e.g. 6205"
+                               @bind="_f.HSNCode" @bind:event="oninput" />
+                        @if (E("HSNCode"))
+                        {
+                            <div class="field-err">@_errs["HSNCode"]</div>
+                        }
+                    </div>
+
+                    <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:16px">
+                        <label class="form-check">
+                            <input type="checkbox" @bind="_f.IsFavourite" />
+                            Mark as Favourite ⭐
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VARIANTS -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Variants</span>
+                <button class="btn btn-outline btn-sm" @onclick="AddVariant">
+                    Add Variant
+                </button>
+            </div>
+
+            <div class="card-body">
+                @if (E("Variants"))
+                {
+                    <div class="alert alert-error">@_errs["Variants"]</div>
+                }
+
+                @for (int i = 0; i < _f.Variants.Count; i++)
+                {
+                    var idx = i;
+                    var v = _f.Variants[idx];
+
+                    <div class="variant-box">
+                        <div class="variant-row">
+                            <span style="font-size:0.72rem;font-weight:600;color:#64748b;
+                                             text-transform:uppercase;min-width:70px">
+                                Variant @(idx + 1)
+                            </span>
+
+                            <div style="flex:1">
+                                <input class="form-control @(E($"V{idx}Name") ? "is-invalid" : "")"
+                                       placeholder="e.g. size, color"
+                                       @bind="v.Name" @bind:event="oninput" />
+
+                                @if (E($"V{idx}Name"))
+                                {
+                                    <div class="field-err">@_errs[$"V{idx}Name"]</div>
+                                }
+                            </div>
+
+                            @if (_f.Variants.Count > 1)
+                            {
+                                <button class="btn btn-outline btn-sm" style="color:#ef4444"
+                                        @onclick="() => RemoveVariant(idx)">
+                                    ✕
+                                </button>
+                            }
+                        </div>
+
+                        <!-- OPTIONS TAGS -->
+                        <div class="tags">
+                            @foreach (var opt in v.Options)
+                            {
+                                var o = opt;
+                                <span class="tag">
+                                    @o
+                                    <button class="tag-x" @onclick="() => RemoveOption(idx, o)">✕</button>
+                                </span>
+                            }
+
+                            @if (!v.Options.Any())
+                            {
+                                <span style="font-size:0.78rem;color:#94a3b8;align-self:center">
+                                    No options yet
+                                </span>
+                            }
+                        </div>
+
+                        @if (E($"V{idx}Opts"))
+                        {
+                            <div class="field-err" style="margin-bottom:6px">
+                                @_errs[$"V{idx}Opts"]
+                            </div>
+                        }
+
+                        <!-- ADD OPTION -->
+                        <div class="add-row">
+                            <input class="form-control"
+                                   placeholder="Type option and press Enter (e.g. S, M, L)"
+                                   @bind="v.NewOption"
+                                   @bind:event="oninput"
+                                   @onkeydown="(e) => HandleOptionKeyDown(e, idx)" />
+
+                            <button class="btn btn-outline btn-sm" @onclick="() => AddOption(idx)">
+                                Add
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- SUMMARY + SUBMIT -->
+    <div class="card" style="position:sticky;top:70px">
+        <div class="card-header"><span class="card-title">Summary</span></div>
+        <div class="card-body">
+            <div style="font-size:0.85rem;line-height:2;color:#374151">
+                <div><strong>Name:</strong> @(string.IsNullOrWhiteSpace(_f.Name) ? "—" : _f.Name)</div>
+                <div><strong>Code:</strong> @(string.IsNullOrWhiteSpace(_f.ProductCode) ? "—" : _f.ProductCode)</div>
+                <div><strong>HSN:</strong> @(string.IsNullOrWhiteSpace(_f.HSNCode) ? "—" : _f.HSNCode)</div>
+                <div><strong>Variants:</strong> @_f.Variants.Count</div>
+                <div><strong>Total Options:</strong> @_f.Variants.Sum(v => v.Options.Count)</div>
+            </div>
+
+            <hr style="border:none;border-top:1px solid #e2e8f0;margin:14px 0" />
+
+            <button class="btn btn-primary" style="width:100%" @onclick="Submit" disabled="@_saving">
+                @if (_saving)
+                {
+                    <span class="spinner" style="width:16px;height:16px;border-width:2px"></span>
+                }
+                @(_saving ? "Creating..." : "Create Product")
+            </button>
+
+            <a href="/products" class="btn btn-outline"
+               style="width:100%;margin-top:8px;justify-content:center">
+                Cancel
+            </a>
+        </div>
+    </div>
+
+</div>
+
+@code {
+    ProductFormModel _f = new();
+    Dictionary<string, string> _errs = new();
+    bool _saving, _success;
+    string? _err;
+
+    bool E(string k) => _errs.ContainsKey(k);
+
+    void AddVariant()
+    {
+        _f.Variants.Add(new VariantFormModel());
+    }
+
+    void RemoveVariant(int index)
+    {
+        _f.Variants.RemoveAt(index);
+    }
+
+    void AddOption(int variantIndex)
+    {
+        var v = _f.Variants[variantIndex];
+
+        if (!string.IsNullOrWhiteSpace(v.NewOption))
+        {
+            v.Options.Add(v.NewOption.Trim());
+            v.NewOption = "";
+        }
+    }
+
+    void RemoveOption(int variantIndex, string option)
+    {
+        _f.Variants[variantIndex].Options.Remove(option);
+    }
+
+    void HandleOptionKeyDown(KeyboardEventArgs e, int variantIndex)
+    {
+        if (e.Key == "Enter")
+        {
+            AddOption(variantIndex);
+        }
+    }
+
+    async Task Submit()
+    {
+        _errs = _f.Validate();
+        if (_errs.Any()) return;
+
+        _saving = true;
+        _err = null;
+        _success = false;
+
+        var req = new CreateProductRequest
+        {
+            Name = _f.Name.Trim(),
+            ProductCode = _f.ProductCode.Trim().ToUpper(),
+            HSNCode = _f.HSNCode.Trim(),
+            IsFavourite = _f.IsFavourite,
+            Variants = _f.Variants.Select(v => new VariantRequest
+            {
+                Name = v.Name.Trim(),
+                Options = v.Options
+            }).ToList()
+        };
+
+        var (id, err) = await Svc.CreateProductAsync(req);
+
+        if (id != null)
+        {
+            _success = true;
+            _f = new ProductFormModel();
+        }
+        else
+        {
+            _err = err;
+        }
+
+        _saving = false;
+    }
+}

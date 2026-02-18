@@ -1,0 +1,246 @@
+﻿@page "/stock"
+@using ProductInventorySystem.Blazor.Models
+@using ProductInventorySystem.Blazor.Services
+@inject IProductService ProductSvc
+@inject IStockService StockSvc
+
+<PageTitle>Stock Manager</PageTitle>
+
+<div class="page-header">
+    <div>
+        <div class="page-title">Stock Manager</div>
+        <div class="page-sub">Add or remove stock for product variants</div>
+    </div>
+</div>
+
+@if (_loadErr != null)
+{
+    <div class="alert alert-error">
+        @_loadErr
+        <button class="btn btn-outline btn-sm" @onclick="LoadProducts">Retry</button>
+    </div>
+}
+@if (_successMsg != null)
+{
+    <div class="alert alert-success">@_successMsg</div>
+}
+@if (_stockErr != null)
+{
+    <div class="alert alert-error">@_stockErr</div>
+}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+
+    <!-- SELECT PRODUCT -->
+    <div class="card">
+        <div class="card-header"><span class="card-title">1️⃣ Select Product & Variant</span></div>
+        <div class="card-body">
+            @if (_loading)
+            {
+                <div class="loading-box"><div class="spinner"></div><span>Loading...</span></div>
+            }
+            else
+            {
+                <div class="form-group">
+                    <label class="form-label">Product <span class="req">*</span></label>
+                    <select class="form-control" @bind="_selProductId" @bind:after="OnProductChanged">
+                        <option value="">-- Select a product --</option>
+                        @foreach (var p in _products)
+                        {
+                            <option value="@p.Id">@p.ProductName (@p.ProductCode)</option>
+                        }
+                    </select>
+                </div>
+
+                @if (SelProduct != null)
+                {
+                    <div class="form-group">
+                        <label class="form-label">Variant Group <span class="req">*</span></label>
+                        <select class="form-control" @bind="_selVariantId" @bind:after="StateHasChanged">
+                            <option value="">-- Select variant --</option>
+                            @foreach (var v in SelProduct.Variants)
+                            {
+                                <option value="@v.Id">@v.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                @if (SelVariant != null)
+                {
+                    <div class="form-group">
+                        <label class="form-label">Option <span class="req">*</span></label>
+                        @foreach (var sv in SelVariant.SubVariants)
+                        {
+                            var isSelected = _selSubId == sv.Id;
+                            <div style="display:flex;align-items:center;justify-content:space-between;
+                                                    padding:10px 14px;border:2px solid @(isSelected ? "#3b82f6" : "#e2e8f0");
+                                                    border-radius:8px;margin-bottom:6px;cursor:pointer;
+                                                    background:@(isSelected ? "#eff6ff" : "#fff");transition:all 0.15s"
+                                 @onclick="() => _selSubId = sv.Id">
+                                <div>
+                                    <div style="font-weight:600">@sv.OptionValue</div>
+                                    <div style="font-size:0.72rem;color:#94a3b8">@sv.SKU</div>
+                                </div>
+                                <span class="@SC(sv.Stock)">@sv.Stock units</span>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- STOCK ACTION -->
+    <div class="card">
+        <div class="card-header"><span class="card-title">2️⃣ Stock Action</span></div>
+        <div class="card-body">
+
+            <div class="type-row">
+                <button class="type-btn buy @(_type == "buy" ? "sel" : "")" @onclick='() => _type = "buy"'>
+                    <div class="t-icon"></div>
+                    <div class="t-label">Add Stock</div>
+                    <div style="font-size:0.72rem;color:#94a3b8">Purchase / Receive</div>
+                </button>
+                <button class="type-btn sell @(_type == "sell" ? "sel" : "")" @onclick='() => _type = "sell"'>
+                    <div class="t-icon"></div>
+                    <div class="t-label">Remove Stock</div>
+                    <div style="font-size:0.72rem;color:#94a3b8">Sale / Dispatch</div>
+                </button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Quantity <span class="req">*</span></label>
+                <input class="form-control @(_qtyErr ? "is-invalid" : "")"
+                       type="number" min="1" placeholder="Enter quantity"
+                       @bind="_qty" @bind:event="oninput" />
+                @if (_qtyErr)
+                {
+                    <div class="field-err">Quantity must be greater than 0.</div>
+                }
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Notes (optional)</label>
+                <input class="form-control" placeholder="e.g. Order #1234"
+                       @bind="_notes" />
+            </div>
+
+            @if (SelSub != null)
+            {
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;
+                                padding:12px;margin-bottom:16px;font-size:0.82rem">
+                    <div><strong>Selected:</strong> @SelSub.OptionValue</div>
+                    <div><strong>Current Stock:</strong> @SelSub.Stock units</div>
+                    @if (_qty > 0)
+                    {
+                        var after = _type == "buy" ? SelSub.Stock + _qty : SelSub.Stock - _qty;
+                        <div>
+                            <strong>Stock After Action:</strong>
+                            <span class="@SC(after)" style="margin-left:4px">@after units</span>
+                        </div>
+                        @if (_type == "sell" && _qty > SelSub.Stock)
+                        {
+                            <div class="field-err" style="margin-top:4px">
+                                Not enough stock! Available: @SelSub.Stock
+                            </div>
+                        }
+                    }
+                </div>
+            }
+
+            <button class="btn @(_type == "buy" ? "btn-success" : "btn-danger")"
+                    style="width:100%"
+                    @onclick="Submit"
+                    disabled="@(_submitting || _selSubId == Guid.Empty || _qty <= 0)">
+                @if (_submitting)
+                {
+                    <span class="spinner" style="width:16px;height:16px;border-width:2px"></span>
+                }
+                @(_type == "buy" ? "Add Stock" : "Remove Stock")
+            </button>
+        </div>
+    </div>
+
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ProductId { get; set; }
+
+    bool _loading = true, _submitting, _qtyErr;
+    string? _loadErr, _stockErr, _successMsg;
+    string _type = "buy", _notes = "";
+    decimal _qty;
+    string _selProductId = "";
+    Guid _selVariantId, _selSubId;
+    List<ProductListDto> _products = new();
+
+    ProductListDto? SelProduct => _products.FirstOrDefault(p => p.Id.ToString() == _selProductId);
+    VariantListDto? SelVariant => SelProduct?.Variants.FirstOrDefault(v => v.Id == _selVariantId);
+    SubVariantListDto? SelSub => SelVariant?.SubVariants.FirstOrDefault(s => s.Id == _selSubId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProducts();
+        if (!string.IsNullOrEmpty(ProductId))
+        {
+            _selProductId = ProductId;
+            await OnProductChanged();
+        }
+    }
+
+    async Task LoadProducts()
+    {
+        _loading = true; _loadErr = null;
+        var (data, err) = await ProductSvc.GetProductsAsync(1, 100);
+        if (data != null) _products = data.Items;
+        else _loadErr = err;
+        _loading = false;
+    }
+
+    Task OnProductChanged()
+    {
+        _selVariantId = Guid.Empty;
+        _selSubId = Guid.Empty;
+        return Task.CompletedTask;
+    }
+
+    async Task Submit()
+    {
+        _qtyErr = _qty <= 0;
+        _stockErr = null; _successMsg = null;
+        if (_qtyErr) return;
+        if (SelProduct == null || _selSubId == Guid.Empty)
+        {
+            _stockErr = "Please select a product and option first.";
+            return;
+        }
+
+        _submitting = true;
+        var req = new StockRequest
+        {
+            ProductId = SelProduct.Id,
+            SubVariantId = _selSubId,
+            Quantity = _qty,
+            Notes = string.IsNullOrWhiteSpace(_notes) ? null : _notes
+        };
+
+        var err = _type == "buy"
+            ? await StockSvc.AddStockAsync(req)
+            : await StockSvc.RemoveStockAsync(req);
+
+        if (err == null)
+        {
+            _successMsg = _type == "buy"
+                ? $"Added {_qty} units successfully."
+                : $"Removed {_qty} units successfully.";
+            _qty = 0; _notes = "";
+            await LoadProducts();
+        }
+        else _stockErr = err;
+
+        _submitting = false;
+    }
+
+    string SC(decimal s) => s == 0 ? "stock-zero" : s < 10 ? "stock-low" : "stock-ok";
+}

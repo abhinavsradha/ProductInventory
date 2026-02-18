@@ -1,0 +1,238 @@
+﻿@page "/products"
+@using ProductInventorySystem.Blazor.Models
+@using ProductInventorySystem.Blazor.Services
+@inject IProductService Svc
+@inject NavigationManager Nav
+
+<PageTitle>Products</PageTitle>
+
+<div class="page-header">
+    <div>
+        <div class="page-title">Products</div>
+        <div class="page-sub">@_total products in catalogue</div>
+    </div>
+    <a href="/products/create" class="btn btn-primary">➕ New Product</a>
+</div>
+
+@if (_err != null)
+{
+    <div class="alert alert-error">
+        @_err
+        <button class="btn btn-outline btn-sm" @onclick="Load">Retry</button>
+    </div>
+}
+
+<div class="toolbar">
+    <div class="search-box">
+        <span class="s-icon"></span>
+        <input class="form-control" placeholder="Search by name or code..."
+               @bind="_search" @bind:event="oninput" />
+    </div>
+
+    <select class="form-control" style="width:140px"
+            @bind="_filterActive">
+        <option value="">All Status</option>
+        <option value="true">Active</option>
+        <option value="false">Inactive</option>
+    </select>
+
+    <button class="btn btn-outline" @onclick="Load">Refresh</button>
+</div>
+
+@if (_loading)
+{
+    <div class="loading-box">
+        <div class="spinner"></div>
+        <span>Loading products...</span>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Product List</span>
+            <span style="font-size:0.78rem;color:#94a3b8">@_total records</span>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Product</th>
+                        <th>Code</th>
+                        <th>HSN</th>
+                        <th>Variants</th>
+                        <th>Total Stock</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var p in Filtered)
+                    {
+                        <tr>
+                            <td>
+                                <button class="exp-btn" @onclick="() => Toggle(p.Id)">
+                                    @(_exp.Contains(p.Id) ? "▼" : "▶")
+                                </button>
+                            </td>
+
+                            <td>
+                                <div class="td-name">@p.ProductName @(p.IsFavourite ? "⭐" : "")</div>
+                                <div style="font-size:0.72rem;color:#94a3b8">
+                                    @p.CreatedDate.LocalDateTime.ToString("dd MMM yyyy")
+                                </div>
+                            </td>
+
+                            <td class="td-code">@p.ProductCode</td>
+                            <td>@p.HSNCode</td>
+                            <td>@p.Variants.Count variant(s)</td>
+                            <td><span class="@SC(p.TotalStock)">@p.TotalStock</span></td>
+
+                            <td>
+                                <span class="badge @(p.Active ? "badge-active" : "badge-inactive")">
+                                    @(p.Active ? "Active" : "Inactive")
+                                </span>
+                            </td>
+
+                            <td>
+                                <button class="btn btn-outline btn-sm"
+                                        @onclick="@(() => Nav.NavigateTo($"/stock?productId={p.Id}"))">
+                                    Stock
+                                </button>
+                            </td>
+                        </tr>
+
+                        @if (_exp.Contains(p.Id))
+                        {
+                            @foreach (var v in p.Variants)
+                            {
+                                <tr class="subrow">
+                                    <td></td>
+                                    <td colspan="7" style="padding:8px 16px 12px 36px">
+                                        <div style="font-size:0.7rem;font-weight:600;color:#64748b;
+                                                                    text-transform:uppercase;margin-bottom:6px">
+                                            Variant: @v.Name
+                                        </div>
+
+                                        <table style="width:auto">
+                                            <thead>
+                                                <tr>
+                                                    <th>Option</th>
+                                                    <th>SKU</th>
+                                                    <th>Stock</th>
+                                                </tr>
+                                            </thead>
+
+                                            <tbody>
+                                                @foreach (var sv in v.SubVariants)
+                                                {
+                                                    <tr>
+                                                        <td style="font-weight:500">@sv.OptionValue</td>
+                                                        <td style="font-size:0.72rem;color:#94a3b8">@sv.SKU</td>
+                                                        <td><span class="@SC(sv.Stock)">@sv.Stock</span></td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    }
+                </tbody>
+            </table>
+
+            @if (!Filtered.Any())
+            {
+                <div class="empty">
+                    <div class="empty-icon"></div>
+                    <div class="empty-title">No products found</div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (_pages > 1)
+    {
+        <div class="pager">
+            <button class="pager-btn" @onclick="() => Go(_page - 1)" disabled="@(_page <= 1)">←</button>
+
+            @for (int i = 1; i <= _pages; i++)
+            {
+                var pg = i;
+                <button class="pager-btn @(_page == pg ? "cur" : "")"
+                        @onclick="() => Go(pg)">
+                    @pg
+                </button>
+            }
+
+            <button class="pager-btn" @onclick="() => Go(_page + 1)" disabled="@(_page >= _pages)">→</button>
+        </div>
+    }
+}
+
+@code {
+    bool _loading = true;
+    string? _err;
+    string _search = "", _filterActive = "";
+
+    HashSet<Guid> _exp = new();
+    List<ProductListDto> _products = new();
+
+    int _page = 1, _pageSize = 10, _total, _pages;
+
+    IEnumerable<ProductListDto> Filtered =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _products
+            : _products.Where(p =>
+                p.ProductName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                p.ProductCode.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    async Task Load()
+    {
+        _loading = true;
+        _err = null;
+
+        bool? active =
+            _filterActive == "true" ? true :
+            _filterActive == "false" ? false :
+            null;
+
+        var (data, err) = await Svc.GetProductsAsync(_page, _pageSize, active);
+
+        if (data != null)
+        {
+            _products = data.Items;
+            _total = data.TotalCount;
+            _pages = data.TotalPages;
+        }
+        else
+        {
+            _err = err;
+        }
+
+        _loading = false;
+    }
+
+    void Toggle(Guid id)
+    {
+        if (!_exp.Remove(id))
+            _exp.Add(id);
+    }
+
+    async Task Go(int p)
+    {
+        _page = p;
+        await Load();
+    }
+
+    string SC(decimal s) => s == 0 ? "stock-zero" : s < 10 ? "stock-low" : "stock-ok";
+}

@@ -6,7 +6,7 @@ STEP 2: Open solution in Visual Studio Open this file in Visual Studio:
 ProductInventorySystem.API.sln
 ProductInventorySystem.Blazor.csproj
 
-STEP 4: Set Multiple Startup Projects In Visual Studio:
+STEP 3: Set Multiple Startup Projects In Visual Studio:
 Right click Solution
 Click Properties
 Select Startup Project
@@ -18,3 +18,4 @@ STEP 5: Run the project Press F5 or click Start button in Visual Studio.
 OUTPUT
 API Swagger will open in browser
 Blazor UI will open in browser
+Database is Attached With Email

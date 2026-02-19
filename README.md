@@ -1,7 +1,6 @@
 
 STEP 1: Clone the repository Open terminal / Git Bash and run:
 
-git clone https://github.com/abhinavsradhha/StockMaster.git
 
 STEP 2: Open solution in Visual Studio Open this file in Visual Studio:
 ProductInventorySystem.API.sln
